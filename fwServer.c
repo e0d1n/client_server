@@ -53,20 +53,23 @@ void process_HELLO_msg(int sock)
     struct hello_rp hello_rp;
     int n;
 
-    /*
-    stshort(2,hello_rp.opcode);
+    stshort(2,&hello_rp.opcode);
+
+    //hello_rp.opcode = htons(2);
 
     memcpy(hello_rp.msg,"Hello World\0",12);
 
-
     *((struct hello_rp *)buffer) = hello_rp;
-     *
 
     printf("Send: %hu %s\n",hello_rp.opcode,hello_rp.msg);
-     */
 
-    n = send(sock,"asdf",sizeof("asdf"),0);
 
+    n = send(sock,buffer,sizeof(hello_rp),0);
+
+    if (n < 0) {
+        perror("ERROR writing to socket");
+        exit(1);
+    }
 }
 
 /**
@@ -103,6 +106,9 @@ int process_msg(int sock, struct FORWARD_chain *chain)
             process_HELLO_msg(sock);
             break;
         case MSG_LIST:
+
+
+
             break;
         case MSG_ADD:
             break;

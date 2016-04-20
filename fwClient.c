@@ -148,7 +148,10 @@ void process_hello_operation(int sock)
 
     recv(sock, buffer, sizeof(buffer), 0);
 
-    printf("Recieved: %s",buffer);
+    hello_rp.opcode = ldshort(buffer);
+    memcpy(hello_rp.msg,(buffer+sizeof(unsigned short)),12);
+
+    printf("Recieved: |%hu|%s|",hello_rp.opcode,hello_rp.msg);
 
 
 }
