@@ -29,7 +29,7 @@
 #define MSG_ADD 5
 #define MSG_CHANGE 6
 #define MSG_DELETE 7
-#define MSG_FLUSH 8
+//#define MSG_FLUSH 8
 #define MSG_FINISH 9
 #define MSG_OK 10
 #define MSG_ERR 11

@@ -53,7 +53,7 @@ void process_HELLO_msg(int sock)
     struct hello_rp hello_rp;
     int n;
 
-    stshort(2,&hello_rp.opcode);
+    stshort(MSG_HELLO_RP,&hello_rp.opcode);
 
     //hello_rp.opcode = htons(2);
 
@@ -72,6 +72,95 @@ void process_HELLO_msg(int sock)
     }
 }
 
+
+
+/**
+ * Function that sends a List of the rules to the client
+ * @param sock the communications socket
+ * @param chain of rules
+ */
+void process_RULES(int sock, struct FORWARD_chain *chain)
+{
+
+
+    char buffer[MAX_BUFF_SIZE];
+    unsigned short num_rules;
+    char *p;
+    int n;
+
+    p = buffer;
+
+    printf("PROCESSING RULES MSG\n");
+
+    stshort(MSG_RULES,buffer);
+    p = p+sizeof(unsigned short);
+
+    num_rules = (unsigned short)chain->num_rules;
+
+    memcpy(p,&num_rules,sizeof(unsigned short));
+    p = p+sizeof(unsigned short);
+
+
+    struct fw_rule *offset = chain->first_rule;
+
+    while((offset) != NULL){
+
+        memcpy(p,&offset->rule,sizeof(rule));
+        p = p+sizeof(rule);
+        offset = offset->next_rule;
+        printf("Rule");
+
+    };
+
+    //Send list
+    n = send(sock,buffer,MAX_BUFF_SIZE,0);
+
+    if (n < 0) {
+        perror("ERROR writing to socket");
+        exit(1);
+    }
+
+
+}
+
+void process_ADD(int sock, struct FORWARD_chain *chain, char *buffer)
+{
+
+    printf("PROCESSING ADD\n");
+
+
+    //rule *new_rule = (rule*)malloc(sizeof(rule));
+
+    /*
+    4 bytes     2 bytes    2 bytes    2 bytes       2 bytes
+    --------------------------------------------------------
+    | net_ID/IP | src/dst  | net_mask | sport/dport | port |
+    --------------------------------------------------------
+
+    typedef struct FORWARD_rule{
+        struct in_addr addr;
+        unsigned short src_dst_addr;
+        unsigned short mask;
+        unsigned short src_dst_port;
+        unsigned short port;
+    }rule;
+     */
+
+    struct fw_rule *new_fw_rule = (struct fw_rule*)malloc(sizeof(struct fw_rule));
+    new_fw_rule->rule = *((rule *)buffer);
+
+    if(chain->first_rule == NULL){
+
+        chain->first_rule = new_fw_rule;
+        new_fw_rule->next_rule = NULL;
+    }else{
+        new_fw_rule->next_rule = chain->first_rule;
+        chain->first_rule = new_fw_rule;
+    }
+    chain->num_rules += 1;
+}
+
+
 /**
  * Receives and process the request from a client.
  * @param the socket connected to the client.
@@ -83,13 +172,14 @@ void process_HELLO_msg(int sock)
 int process_msg(int sock, struct FORWARD_chain *chain)
 {
     unsigned short op_code;
-    int finish = 0;
+    int finish = FALSE;
     int n;
     char buffer[MAX_BUFF_SIZE];
+    char buffer_n_op[MAX_BUFF_SIZE-2];
 
     bzero(buffer,MAX_BUFF_SIZE);
 
-    n = recv(sock, buffer, sizeof(buffer), 0);
+    n = recv(sock, buffer, MAX_BUFF_SIZE, 0);
 
     if (n < 0) {
         perror("ERROR reading from socket");
@@ -106,11 +196,11 @@ int process_msg(int sock, struct FORWARD_chain *chain)
             process_HELLO_msg(sock);
             break;
         case MSG_LIST:
-
-
-
+            process_RULES(sock,chain);
             break;
         case MSG_ADD:
+            memcpy(buffer_n_op,buffer+2,12);
+            process_ADD(sock,chain,buffer_n_op);
             break;
         case MSG_CHANGE:
             break;
@@ -119,7 +209,7 @@ int process_msg(int sock, struct FORWARD_chain *chain)
         case MSG_FLUSH:
             break;
         case MSG_FINISH:
-            finish = 1;
+            finish = TRUE;
             break;
         default:
             perror("Message code does not exist.\n");

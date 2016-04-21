@@ -131,7 +131,7 @@ void process_hello_operation(int sock)
     char buffer[MAX_BUFF_SIZE];
     int n;
 
-    unsigned short code = 1;
+    unsigned short code = MSG_HELLO;
 
     bzero(buffer,MAX_BUFF_SIZE);
     stshort(code, buffer);
@@ -145,7 +145,7 @@ void process_hello_operation(int sock)
         exit(1);
     }
 
-
+    bzero(buffer,MAX_BUFF_SIZE);
     recv(sock, buffer, sizeof(buffer), 0);
 
     hello_rp.opcode = ldshort(buffer);
@@ -155,6 +155,246 @@ void process_hello_operation(int sock)
 
 
 }
+
+void process_list_operation(int sock)
+{
+    char buffer[MAX_BUFF_SIZE];
+    int n;
+    char *offset;
+    unsigned short opcode = MSG_LIST;
+
+    bzero(buffer,MAX_BUFF_SIZE);
+    stshort(opcode, buffer);
+
+    /* Send message to the server */
+    n = send(sock, buffer, sizeof(unsigned short),0);
+
+    if (n < 0) {
+        perror("ERROR writing to socket");
+        exit(1);
+    }
+
+    printf("Firewall FORWARD rules:\n");
+    printf("------------------------\n");
+
+    /////////////////////////////////////
+    bzero(buffer,MAX_BUFF_SIZE);
+    recv(sock, buffer, MAX_BUFF_SIZE, 0);
+
+    offset = buffer;
+    opcode = ldshort(offset);
+
+
+    if(opcode == 4){
+
+        offset += sizeof(unsigned short);
+
+        unsigned short tot_rules;
+        unsigned short temp;
+        tot_rules = (unsigned short) *offset;
+
+        offset += sizeof(unsigned short); //start first rule
+        rule new_rule;
+
+        int i;
+        for(i=0;i<(int) tot_rules ;i++) {
+
+            new_rule = *((rule *) offset);
+            printf("%d: ",i+1);
+
+            //ADDRESS
+            printf("%s ", inet_ntoa(new_rule.addr));
+            offset += 4;
+
+            //SRC/DEST
+            temp = *offset;
+
+            if(temp == SRC){
+                printf("SRC ");
+            } else{
+                printf("DST ");
+            }
+            offset += sizeof(unsigned short);
+
+            //MASK
+            temp = *offset;
+            printf("%hu ",temp);
+            offset += sizeof(unsigned short);
+
+            //SRC/DEST PORT
+            temp = *offset;
+            if(temp == SRC){
+                printf("SRC ");
+            } else{
+                printf("DST ");
+            }
+            offset += sizeof(unsigned short);
+
+            // PORT
+            temp = *offset;
+            printf("%hu\n",temp);
+            offset += sizeof(unsigned short);
+            //offset += sizeof(rule);
+        }
+        printf("Tot Rules: %hu",tot_rules);
+    }
+
+}
+
+int process_add_operation(int sock)
+{
+    char buffer[MAX_BUFF_SIZE];
+    int n;
+    char *offset = buffer;
+    unsigned short code = MSG_ADD;
+
+    bzero(buffer,MAX_BUFF_SIZE);
+    stshort(code, buffer);
+    offset += sizeof(unsigned short);
+
+    printf("Firewall FORWARD rules:\n");
+    printf("------------------------\n");
+
+
+    printf("Introdueix la regla seguint el format:\n");
+    printf("address src|dst Netmask [sport|dport] [port]\n");
+
+    //rule *new_rule = (rule*)malloc(sizeof(rule));
+
+
+    /*
+    4 bytes     2 bytes    2 bytes    2 bytes       2 bytes
+    --------------------------------------------------------
+    | net_ID/IP | src/dst  | net_mask | sport/dport | port |
+    --------------------------------------------------------
+
+    typedef struct FORWARD_rule{
+        struct in_addr addr;
+        unsigned short src_dst_addr;
+        unsigned short mask;
+        unsigned short src_dst_port;
+        unsigned short port;
+    }rule;
+     */
+
+    char full_rule[40];
+    char * token;
+
+
+    // Read user rule
+    scanf(" %[^\n]s",full_rule);
+
+    //================
+    // ADDRESS
+    //================
+
+
+    int v_ip;
+    token = strtok (full_rule," ");
+
+    struct in_addr address;
+    v_ip = inet_aton(token, &address);
+
+    if(v_ip == 0){
+
+        printf("%s No valid address\n",NOK_MSG);
+        return 1;
+    }
+    memcpy(offset,&address, 4);
+    offset+=4;
+
+    //================
+    // SRC/DST
+    //================
+    token = strtok (NULL, " ");
+    if(strcmp(token,"src") == 0){
+
+        *offset = (unsigned short) SRC;
+
+
+    }else if(strcmp(token,"dst") == 0){
+
+        *offset = (unsigned short) DST;
+
+    }else{
+
+        printf("%s No valid SRC/DST\n",NOK_MSG);
+        return 1;
+    }
+
+    offset+= sizeof(unsigned short);
+
+    //printf("%s",inet_ntoa(new_rule->addr));
+
+    //================
+    // MASK
+    //================
+
+    token = strtok (NULL, " ");
+    int mask = atoi(token) ;
+
+    if((mask <= 32) && (mask >= 0)){
+
+        *offset = (unsigned short) mask;
+
+    } else{
+
+        printf("%s No valid MASK\n",NOK_MSG);
+        return 1;
+    }
+    offset+= sizeof(unsigned short);
+
+    //================
+    // SPORT/DPORT
+    //================
+
+    token = strtok (NULL, " ");
+
+    if(strcmp(token,"sport") == 0){
+
+        *offset = (unsigned short) SRC;
+
+    }else if(strcmp(token,"dport") == 0){
+
+        *offset = (unsigned short) DST;
+
+    }else{
+
+        printf("%s No valid SPORT/DPORT parameter\n",NOK_MSG);
+        return 1;
+    }
+    offset+= sizeof(unsigned short);
+
+    //================
+    // SRC/DEST PORT
+    //================
+
+    token = strtok (NULL, " ");
+    int port = atoi(token) ;
+
+    if((port <= 65535) && (port > 0)){
+        *offset = (unsigned short) port;
+
+    } else{
+
+        printf("%s No valid PORT\n",NOK_MSG);
+        return 1;
+    }
+
+
+    /* Send message to the server */
+    n = send(sock, buffer, sizeof(buffer),0);
+
+    if (n < 0) {
+        perror("ERROR writing to socket");
+        exit(1);
+    }
+
+
+    return 0;
+}
+
+
 
 /**
  * Closes the socket connected to the server and finishes the program.
@@ -195,8 +435,10 @@ void process_menu_option(int s, int option)
             process_hello_operation(s);
             break;
         case MENU_OP_LIST_RULES:
+            process_list_operation(s);
             break;
         case MENU_OP_ADD_RULE:
+            process_add_operation(s);
             break;
         case MENU_OP_CHANGE_RULE:
             break;
@@ -215,7 +457,7 @@ void process_menu_option(int s, int option)
 
 int main(int argc, char *argv[]){
 
-    int sockfd, n;
+    int sockfd;
     unsigned short port;
     char *hostName;
     int menu_option = 0;
