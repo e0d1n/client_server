@@ -128,24 +128,6 @@ void process_ADD(int sock, struct FORWARD_chain *chain, char *buffer)
 
     printf("PROCESSING ADD\n");
 
-
-    //rule *new_rule = (rule*)malloc(sizeof(rule));
-
-    /*
-    4 bytes     2 bytes    2 bytes    2 bytes       2 bytes
-    --------------------------------------------------------
-    | net_ID/IP | src/dst  | net_mask | sport/dport | port |
-    --------------------------------------------------------
-
-    typedef struct FORWARD_rule{
-        struct in_addr addr;
-        unsigned short src_dst_addr;
-        unsigned short mask;
-        unsigned short src_dst_port;
-        unsigned short port;
-    }rule;
-     */
-
     struct fw_rule *new_fw_rule = (struct fw_rule*)malloc(sizeof(struct fw_rule));
     new_fw_rule->rule = *((rule *)buffer);
 
@@ -158,6 +140,102 @@ void process_ADD(int sock, struct FORWARD_chain *chain, char *buffer)
         chain->first_rule = new_fw_rule;
     }
     chain->num_rules += 1;
+
+    //TODO : ADD OK MESSAGE TO CLIENT
+}
+
+void process_CHANGE(int sock, struct FORWARD_chain *chain, char *buffer)
+{
+
+    printf("PROCESSING CHANGE\n");
+
+    unsigned short id;
+
+    id = *buffer;
+    buffer += sizeof(unsigned short);
+
+    //struct rule *new_fw_rule = (rule*)malloc(sizeof(rule));
+    rule changed_rule = *((rule *)buffer);
+
+        int count = 0;
+        int found = 0;
+        struct fw_rule *p;
+        p = chain->first_rule;
+        if(p != NULL) {
+            while ((p->next_rule != NULL) && !found) {
+
+                if (count == (id - 1)) {
+                    found = 1;
+                } else {
+                    p = p->next_rule;
+                    count++;
+                }
+
+            }
+
+            if (found) {
+
+                //struct fw_rule *temp_r = p->next_rule;
+                p->next_rule->rule = changed_rule;
+
+            } else {
+                // THIS RULE DOESN'T EXIST
+            }
+        }else{
+            // THIS RULE DOESN'T EXIST
+        }
+
+    //TODO : ADD OK MESSAGE TO CLIENT
+}
+
+void process_DELETE(int sock, struct FORWARD_chain *chain, unsigned short id)
+{
+
+    printf("PROCESSING DELETE\n");
+
+    int count = 1;
+    int found = 0;
+    struct fw_rule *p;
+    p = chain->first_rule;
+    if(p != NULL) {
+
+        // HEAD
+        if(id == 1){
+            struct fw_rule *temp_r = p->next_rule;
+            free(p);
+            chain->first_rule = temp_r;
+
+        }else {
+
+            while ((p->next_rule != NULL) && !found) {
+
+                if (count == (id - 1)) {
+                    found = 1;
+                } else {
+                    p = p->next_rule;
+                    count++;
+                }
+
+            }
+
+            if (found) {
+
+                struct fw_rule *temp_r = p->next_rule->next_rule;
+                free(p->next_rule);
+                p->next_rule = temp_r;
+
+            } else {
+                // THIS RULE DOESN'T EXIST
+            }
+        }
+
+        chain->num_rules -= 1;
+
+    }else {
+        // THIS RULE DOESN'T EXIST
+    }
+
+    //TODO : ADD OK MESSAGE TO CLIENT
 }
 
 
@@ -176,6 +254,7 @@ int process_msg(int sock, struct FORWARD_chain *chain)
     int n;
     char buffer[MAX_BUFF_SIZE];
     char buffer_n_op[MAX_BUFF_SIZE-2];
+    unsigned short id;
 
     bzero(buffer,MAX_BUFF_SIZE);
 
@@ -192,7 +271,6 @@ int process_msg(int sock, struct FORWARD_chain *chain)
     switch(op_code)
     {
         case MSG_HELLO:
-
             process_HELLO_msg(sock);
             break;
         case MSG_LIST:
@@ -203,8 +281,12 @@ int process_msg(int sock, struct FORWARD_chain *chain)
             process_ADD(sock,chain,buffer_n_op);
             break;
         case MSG_CHANGE:
+            memcpy(buffer_n_op,buffer+2,14);
+            process_CHANGE(sock,chain,buffer_n_op);
             break;
         case MSG_DELETE:
+            id = (unsigned short) *(buffer+2);
+            process_DELETE(sock,chain,id);
             break;
         case MSG_FLUSH:
             break;
