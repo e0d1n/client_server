@@ -188,6 +188,7 @@ void process_CHANGE(int sock, struct FORWARD_chain *chain, char *buffer)
     }
 
     char response[4];
+
     if(valid) {
         stshort(MSG_OK, response);
 
@@ -255,6 +256,7 @@ void process_DELETE(int sock, struct FORWARD_chain *chain, unsigned short id)
     }
 
     char response[4];
+
     if(valid) {
         stshort(MSG_OK, response);
 

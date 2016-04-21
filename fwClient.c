@@ -194,6 +194,7 @@ void process_list_operation(int sock)
         tot_rules = (unsigned short) *offset;
 
         offset += sizeof(unsigned short); //start first rule
+
         rule new_rule;
 
         int i;
@@ -202,41 +203,41 @@ void process_list_operation(int sock)
             new_rule = *((rule *) offset);
             printf("%d: ",i+1);
 
-            //ADDRESS
-            printf("%s ", inet_ntoa(new_rule.addr));
-            offset += 4;
-
             //SRC/DEST
-            temp = *offset;
+            temp = new_rule.src_dst_addr;
 
             if(temp == SRC){
                 printf("SRC ");
             } else{
                 printf("DST ");
             }
-            offset += sizeof(unsigned short);
+
+            //ADDRESS
+            printf("%s", inet_ntoa(new_rule.addr));
 
             //MASK
-            temp = *offset;
-            printf("%hu ",temp);
-            offset += sizeof(unsigned short);
+            temp = new_rule.mask;
+            printf("\\%hu ",temp);
+
 
             //SRC/DEST PORT
-            temp = *offset;
+            temp = new_rule.src_dst_port;
             if(temp == SRC){
                 printf("SRC ");
-            } else{
+            } else if(temp == DST){
                 printf("DST ");
             }
-            offset += sizeof(unsigned short);
 
             // PORT
-            temp = *offset;
-            printf("%hu\n",temp);
-            offset += sizeof(unsigned short);
-            //offset += sizeof(rule);
+            temp = new_rule.port;
+            if(temp != 0) {
+                printf("%hu", temp);
+            }
+
+            offset += sizeof(rule);
+            printf("\n");
         }
-        printf("Tot Rules: %hu",tot_rules);
+        printf("Tot Rules: %hu\n",tot_rules);
     }
 
 }
@@ -246,21 +247,6 @@ void process_list_operation(int sock)
  */
 
 int process_rule(char *buffer){
-
-    /*
-    4 bytes     2 bytes    2 bytes    2 bytes       2 bytes
-    --------------------------------------------------------
-    | net_ID/IP | src/dst  | net_mask | sport/dport | port |
-    --------------------------------------------------------
-
-    typedef struct FORWARD_rule{
-        struct in_addr addr;
-        unsigned short src_dst_addr;
-        unsigned short mask;
-        unsigned short src_dst_port;
-        unsigned short port;
-    }rule;
-     */
 
     printf("Introdueix la regla seguint el format:\n");
     printf("address src|dst Netmask [sport|dport] [port]\n");
@@ -272,102 +258,109 @@ int process_rule(char *buffer){
     // Read user rule
     scanf(" %[^\n]s",full_rule);
 
+
     //================
     // ADDRESS
     //================
 
-
     int v_ip;
     token = strtok (full_rule," ");
 
-    struct in_addr address;
-    v_ip = inet_aton(token, &address);
+    if(token != NULL) {
+        struct in_addr address;
+        v_ip = inet_aton(token, &address);
 
-    if(v_ip == 0){
+        if (v_ip == 0) {
 
-        printf("%s No valid address\n",NOK_MSG);
-        return 1;
+            printf("%s No valid address\n", NOK_MSG);
+            return 1;
+        }
+        memcpy(buffer, &address, 4);
+        buffer += 4;
     }
-    memcpy(buffer,&address, 4);
-    buffer+=4;
-
     //================
     // SRC/DST
     //================
-    token = strtok (NULL, " ");
-    if(strcmp(token,SRC_STR) == 0){
+    token = strtok(NULL, " ");
+    if(token != NULL) {
+        if (strcmp(token, SRC_STR) == 0) {
 
-        *buffer = (unsigned short) SRC;
+            *buffer = (unsigned short) SRC;
 
 
-    }else if(strcmp(token,DST_STR) == 0){
+        } else if (strcmp(token, DST_STR) == 0) {
 
-        *buffer = (unsigned short) DST;
+            *buffer = (unsigned short) DST;
 
-    }else{
+        } else {
 
-        printf("%s No valid SRC/DST\n",NOK_MSG);
-        return 1;
+            printf("%s No valid SRC/DST\n", NOK_MSG);
+            return 1;
+        }
+
+        buffer += sizeof(unsigned short);
+
+        //printf("%s",inet_ntoa(new_rule->addr));
     }
-
-    buffer+= sizeof(unsigned short);
-
-    //printf("%s",inet_ntoa(new_rule->addr));
 
     //================
     // MASK
     //================
+    token = strtok(NULL, " ");
+    if(token != NULL) {
+        int mask = atoi(token);
 
-    token = strtok (NULL, " ");
-    int mask = atoi(token) ;
+        if ((mask <= 32) && (mask > 0)) {
 
-    if((mask <= 32) && (mask >= 0)){
+            *buffer = (unsigned short) mask;
 
-        *buffer = (unsigned short) mask;
+        } else {
 
-    } else{
+            printf("%s No valid MASK\n", NOK_MSG);
+            return 1;
+        }
+        
+        buffer += sizeof(unsigned short);
 
-        printf("%s No valid MASK\n",NOK_MSG);
-        return 1;
     }
-    buffer+= sizeof(unsigned short);
-
     //================
     // SPORT/DPORT
     //================
+    token = strtok(NULL, " ");
+    if(token != NULL) {
 
-    token = strtok (NULL, " ");
+        if (strcmp(token, SRC_PORT_STR) == 0) {
 
-    if(strcmp(token,SRC_PORT_STR) == 0){
+            *buffer = (unsigned short) SRC;
 
-        *buffer = (unsigned short) SRC;
+        } else if (strcmp(token, DST_PORT_STR) == 0) {
 
-    }else if(strcmp(token,DST_PORT_STR) == 0){
+            *buffer = (unsigned short) DST;
 
-        *buffer = (unsigned short) DST;
+        } else if (strcmp(token, "0") != 0) {
 
-    }else{
-
-        printf("%s No valid SPORT/DPORT parameter\n",NOK_MSG);
-        return 1;
+            printf("%s No valid SPORT/DPORT parameter\n", NOK_MSG);
+            return 1;
+        }
+        buffer += sizeof(unsigned short);
     }
-    buffer+= sizeof(unsigned short);
-
     //================
     // SRC/DEST PORT
     //================
+    token = strtok(NULL, " ");
+    if(token != NULL) {
+        int port = atoi(token);
 
-    token = strtok (NULL, " ");
-    int port = atoi(token) ;
+        if ((port <= 65535) && (port >= 0)) {
+            *buffer = (unsigned short) port;
 
-    if((port <= 65535) && (port > 0)){
-        *buffer = (unsigned short) port;
+        } else {
 
-    } else{
-
-        printf("%s No valid PORT\n",NOK_MSG);
-        return 1;
+            printf("%s No valid PORT\n", NOK_MSG);
+            return 1;
+        }
     }
+
 
     return 0;
 
