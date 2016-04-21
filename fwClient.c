@@ -399,8 +399,19 @@ void process_add_operation(int sock)
             perror("ERROR writing to socket");
             exit(1);
         }
+
+        bzero(buffer,MAX_BUFF_SIZE);
+        recv(sock, buffer, 4, 0);
+        code = ldshort(buffer);
+
+        if(code == MSG_OK){
+            printf("%s\n",OK_MSG);
+        }else if (code == MSG_ERR){
+            printf("%s%s\n",NOK_MSG,ERR_MSG_RULE);
+        }else{
+            printf("%s\n",ERR_MSG_DEFAULT);
+        }
     }
-    //TODO: check server response
 
 }
 
@@ -421,6 +432,7 @@ void process_change_operation(int sock)
     printf("ID to change: ");
     scanf("%d",&id);
     if(id>0) {
+
         *offset = (unsigned short) id;
         printf("Changing id rule %hu\n", (unsigned short) *offset);
         offset += sizeof(unsigned short);
@@ -438,12 +450,23 @@ void process_change_operation(int sock)
                 perror("ERROR writing to socket");
                 exit(1);
             }
+
+            bzero(buffer,MAX_BUFF_SIZE);
+            recv(sock, buffer, 4, 0);
+            code = ldshort(buffer);
+
+            if(code == MSG_OK){
+                printf("%s\n",OK_MSG);
+            }else if (code == MSG_ERR){
+                printf("%s%s\n",NOK_MSG,ERR_MSG_RULE);
+            }else{
+                printf("%s\n",ERR_MSG_DEFAULT);
+            }
         }
     }else{
-        printf("%s",ERR_MSG_RULE);
+        printf("ID should be bigger than 0: %s",ERR_MSG_RULE);
     }
 
-    //TODO: check server response
 
 
 }
@@ -474,8 +497,18 @@ void process_delete_operation(int sock){
             perror("ERROR writing to socket");
             exit(1);
         }
+
+        bzero(buffer,MAX_BUFF_SIZE);
+        recv(sock, buffer, 4, 0);
+        code = ldshort(buffer);
+        if(code == MSG_OK){
+            printf("%s\n",OK_MSG);
+        }else{
+            printf("%s%s\n",NOK_MSG,ERR_MSG_RULE);
+        }
+
     }else{
-        printf("%s",ERR_MSG_RULE);
+        printf("ID should be bigger than 0: %s",ERR_MSG_RULE);
     }
 
 

@@ -82,7 +82,6 @@ void process_HELLO_msg(int sock)
 void process_RULES(int sock, struct FORWARD_chain *chain)
 {
 
-
     char buffer[MAX_BUFF_SIZE];
     unsigned short num_rules;
     char *p;
@@ -141,7 +140,14 @@ void process_ADD(int sock, struct FORWARD_chain *chain, char *buffer)
     }
     chain->num_rules += 1;
 
-    //TODO : ADD OK MESSAGE TO CLIENT
+    char response[4];
+    stshort(MSG_OK,response);
+
+    if (send(sock,response,4,0) < 0) {
+        perror("ERROR writing to socket");
+        exit(1);
+    }
+
 }
 
 void process_CHANGE(int sock, struct FORWARD_chain *chain, char *buffer)
@@ -157,35 +163,47 @@ void process_CHANGE(int sock, struct FORWARD_chain *chain, char *buffer)
     //struct rule *new_fw_rule = (rule*)malloc(sizeof(rule));
     rule changed_rule = *((rule *)buffer);
 
-        int count = 0;
-        int found = 0;
-        struct fw_rule *p;
-        p = chain->first_rule;
-        if(p != NULL) {
-            while ((p->next_rule != NULL) && !found) {
+    int count = 1;
+    int found = 0;
+    int valid = FALSE;
+    struct fw_rule *p;
+    p = chain->first_rule;
+    while ((p!= NULL) && !found) {
 
-                if (count == (id - 1)) {
-                    found = 1;
-                } else {
-                    p = p->next_rule;
-                    count++;
-                }
-
-            }
-
-            if (found) {
-
-                //struct fw_rule *temp_r = p->next_rule;
-                p->next_rule->rule = changed_rule;
-
-            } else {
-                // THIS RULE DOESN'T EXIST
-            }
-        }else{
-            // THIS RULE DOESN'T EXIST
+        if (count == id) {
+            found = 1;
+        } else {
+            p = p->next_rule;
+            count++;
         }
 
-    //TODO : ADD OK MESSAGE TO CLIENT
+    }
+
+    if (found) {
+        //struct fw_rule *temp_r = p->next_rule;
+        p->rule = changed_rule;
+
+        valid = TRUE;
+
+    }
+
+    char response[4];
+    if(valid) {
+        stshort(MSG_OK, response);
+
+        if (send(sock, response, 2, 0) < 0) {
+            perror("ERROR writing to socket");
+            exit(1);
+        }
+    }else{
+        stshort(MSG_ERR,response);
+        *(response+2) = ERR_RULE;
+
+        if (send(sock,response,4,0) < 0) {
+            perror("ERROR writing to socket");
+            exit(1);
+        }
+    }
 }
 
 void process_DELETE(int sock, struct FORWARD_chain *chain, unsigned short id)
@@ -195,15 +213,18 @@ void process_DELETE(int sock, struct FORWARD_chain *chain, unsigned short id)
 
     int count = 1;
     int found = 0;
+    int valid = FALSE;
     struct fw_rule *p;
     p = chain->first_rule;
     if(p != NULL) {
 
         // HEAD
         if(id == 1){
+
             struct fw_rule *temp_r = p->next_rule;
             free(p);
             chain->first_rule = temp_r;
+            valid = TRUE;
 
         }else {
 
@@ -224,18 +245,32 @@ void process_DELETE(int sock, struct FORWARD_chain *chain, unsigned short id)
                 free(p->next_rule);
                 p->next_rule = temp_r;
 
-            } else {
-                // THIS RULE DOESN'T EXIST
+                valid = TRUE;
+
             }
         }
 
         chain->num_rules -= 1;
 
-    }else {
-        // THIS RULE DOESN'T EXIST
     }
 
-    //TODO : ADD OK MESSAGE TO CLIENT
+    char response[4];
+    if(valid) {
+        stshort(MSG_OK, response);
+
+        if (send(sock, response, 2, 0) < 0) {
+            perror("ERROR writing to socket");
+            exit(1);
+        }
+    }else{
+        stshort(MSG_ERR,response);
+        *(response+2) = ERR_RULE;
+
+        if (send(sock,response,4,0) < 0) {
+            perror("ERROR writing to socket");
+            exit(1);
+        }
+    }
 }
 
 
