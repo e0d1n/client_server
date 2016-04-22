@@ -87,10 +87,9 @@ void process_RULES(int sock, struct FORWARD_chain *chain)
     char *p;
     int n;
 
-    p = buffer;
-
     printf("PROCESSING RULES MSG\n");
 
+    p = buffer;
     stshort(MSG_RULES,buffer);
     p = p+sizeof(unsigned short);
 
@@ -107,7 +106,6 @@ void process_RULES(int sock, struct FORWARD_chain *chain)
         memcpy(p,&offset->rule,sizeof(rule));
         p = p+sizeof(rule);
         offset = offset->next_rule;
-        printf("Rule");
 
     };
 
@@ -134,16 +132,21 @@ void process_ADD(int sock, struct FORWARD_chain *chain, char *buffer)
 
         chain->first_rule = new_fw_rule;
         new_fw_rule->next_rule = NULL;
+
     }else{
+
         new_fw_rule->next_rule = chain->first_rule;
         chain->first_rule = new_fw_rule;
     }
+
     chain->num_rules += 1;
 
-    char response[4];
-    stshort(MSG_OK,response);
+    char response[MAX_BUFF_SIZE];
+    op_ok msg;
+    msg.opcode = MSG_OK;
+    stshort(msg.opcode,response);
 
-    if (send(sock,response,4,0) < 0) {
+    if (send(sock,response, sizeof(MAX_BUFF_SIZE),0) < 0) {
         perror("ERROR writing to socket");
         exit(1);
     }
@@ -158,9 +161,9 @@ void process_CHANGE(int sock, struct FORWARD_chain *chain, char *buffer)
     unsigned short id;
 
     id = *buffer;
+
     buffer += sizeof(unsigned short);
 
-    //struct rule *new_fw_rule = (rule*)malloc(sizeof(rule));
     rule changed_rule = *((rule *)buffer);
 
     int count = 1;
@@ -180,30 +183,34 @@ void process_CHANGE(int sock, struct FORWARD_chain *chain, char *buffer)
     }
 
     if (found) {
-        //struct fw_rule *temp_r = p->next_rule;
+
         p->rule = changed_rule;
 
         valid = TRUE;
 
     }
 
-    char response[4];
+    char response[MAX_BUFF_SIZE];
 
     if(valid) {
-        stshort(MSG_OK, response);
 
-        if (send(sock, response, 2, 0) < 0) {
-            perror("ERROR writing to socket");
-            exit(1);
-        }
+        op_ok msg;
+        msg.opcode = MSG_OK;
+        stshort(msg.opcode,response);
+
     }else{
-        stshort(MSG_ERR,response);
-        *(response+2) = ERR_RULE;
 
-        if (send(sock,response,4,0) < 0) {
-            perror("ERROR writing to socket");
-            exit(1);
-        }
+        op_err msg;
+        msg.opcode = MSG_ERR;
+        msg.error_code = ERR_RULE;
+        stshort(msg.opcode,response);
+        stshort(msg.error_code,response + sizeof(unsigned short));
+
+    }
+
+    if (send(sock, response, sizeof(MAX_BUFF_SIZE), 0) < 0) {
+        perror("ERROR writing to socket");
+        exit(1);
     }
 }
 
@@ -255,23 +262,27 @@ void process_DELETE(int sock, struct FORWARD_chain *chain, unsigned short id)
 
     }
 
-    char response[4];
+    char response[MAX_BUFF_SIZE];
 
     if(valid) {
-        stshort(MSG_OK, response);
 
-        if (send(sock, response, 2, 0) < 0) {
-            perror("ERROR writing to socket");
-            exit(1);
-        }
+        op_ok msg;
+        msg.opcode = MSG_OK;
+        stshort(msg.opcode,response);
+
     }else{
-        stshort(MSG_ERR,response);
-        *(response+2) = ERR_RULE;
 
-        if (send(sock,response,4,0) < 0) {
-            perror("ERROR writing to socket");
-            exit(1);
-        }
+        op_err msg;
+        msg.opcode = MSG_ERR;
+        msg.error_code = ERR_RULE;
+        stshort(msg.opcode,response);
+        stshort(msg.error_code,response + sizeof(unsigned short));
+
+    }
+
+    if (send(sock, response, sizeof(MAX_BUFF_SIZE), 0) < 0) {
+        perror("ERROR writing to socket");
+        exit(1);
     }
 }
 
@@ -290,7 +301,7 @@ int process_msg(int sock, struct FORWARD_chain *chain)
     int finish = FALSE;
     int n;
     char buffer[MAX_BUFF_SIZE];
-    char buffer_n_op[MAX_BUFF_SIZE-2];
+    //char buffer_n_op[MAX_BUFF_SIZE-2];
     unsigned short id;
 
     bzero(buffer,MAX_BUFF_SIZE);
@@ -301,6 +312,7 @@ int process_msg(int sock, struct FORWARD_chain *chain)
         perror("ERROR reading from socket");
         exit(1);
     }
+
     // Reads socket OP CODE
     op_code = ldshort(buffer);
     printf("OPcode: %hu\n",op_code);
@@ -314,12 +326,10 @@ int process_msg(int sock, struct FORWARD_chain *chain)
             process_RULES(sock,chain);
             break;
         case MSG_ADD:
-            memcpy(buffer_n_op,buffer+2,12);
-            process_ADD(sock,chain,buffer_n_op);
+            process_ADD(sock,chain,buffer + sizeof(unsigned short));
             break;
         case MSG_CHANGE:
-            memcpy(buffer_n_op,buffer+2,14);
-            process_CHANGE(sock,chain,buffer_n_op);
+            process_CHANGE(sock,chain,buffer + sizeof(unsigned short));
             break;
         case MSG_DELETE:
             id = (unsigned short) *(buffer+2);

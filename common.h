@@ -67,6 +67,15 @@ struct hello_rp{
 	char msg[12];
 };
 
+typedef struct LIST{
+	unsigned short opcode;
+}list;
+
+typedef struct RULES{
+	unsigned short opcode;
+	unsigned short num_rules;
+	struct FORWARD_rule *rules;
+};
 
 /*
 4 bytes     2 bytes    2 bytes    2 bytes       2 bytes
@@ -82,3 +91,11 @@ typedef struct FORWARD_rule{
   unsigned short port;
 }rule;
 
+typedef struct OP_OK{
+	unsigned short opcode;
+}op_ok;
+
+typedef struct OP_ERR{
+	unsigned short opcode;
+	unsigned short error_code;
+}op_err;

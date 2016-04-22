@@ -191,6 +191,7 @@ void process_list_operation(int sock)
 
         unsigned short tot_rules;
         unsigned short temp;
+
         tot_rules = (unsigned short) *offset;
 
         offset += sizeof(unsigned short); //start first rule
@@ -219,19 +220,17 @@ void process_list_operation(int sock)
             temp = new_rule.mask;
             printf("\\%hu ",temp);
 
-
-            //SRC/DEST PORT
-            temp = new_rule.src_dst_port;
-            if(temp == SRC){
-                printf("SRC ");
-            } else if(temp == DST){
-                printf("DST ");
-            }
-
             // PORT
             temp = new_rule.port;
             if(temp != 0) {
                 printf("%hu", temp);
+                //SRC/DEST PORT
+                temp = new_rule.src_dst_port;
+                if(temp == SRC){
+                    printf("SRC ");
+                } else if(temp == DST){
+                    printf("DST ");
+                }
             }
 
             offset += sizeof(rule);
@@ -246,7 +245,7 @@ void process_list_operation(int sock)
  * @param buffer
  */
 
-int process_rule(char *buffer){
+int process_rule(rule *new_rule){
 
     printf("Introdueix la regla seguint el format:\n");
     printf("address src|dst Netmask [sport|dport] [port]\n");
@@ -275,8 +274,8 @@ int process_rule(char *buffer){
             printf("%s No valid address\n", NOK_MSG);
             return 1;
         }
-        memcpy(buffer, &address, 4);
-        buffer += 4;
+
+        new_rule->addr = address;
     }
     //================
     // SRC/DST
@@ -285,20 +284,18 @@ int process_rule(char *buffer){
     if(token != NULL) {
         if (strcmp(token, SRC_STR) == 0) {
 
-            *buffer = (unsigned short) SRC;
+            new_rule->src_dst_addr = (unsigned short) SRC;
 
 
         } else if (strcmp(token, DST_STR) == 0) {
 
-            *buffer = (unsigned short) DST;
+            new_rule->src_dst_addr = (unsigned short) DST;
 
         } else {
 
             printf("%s No valid SRC/DST\n", NOK_MSG);
             return 1;
         }
-
-        buffer += sizeof(unsigned short);
 
         //printf("%s",inet_ntoa(new_rule->addr));
     }
@@ -312,15 +309,13 @@ int process_rule(char *buffer){
 
         if ((mask <= 32) && (mask > 0)) {
 
-            *buffer = (unsigned short) mask;
+            new_rule->mask = (unsigned short) mask;
 
         } else {
 
             printf("%s No valid MASK\n", NOK_MSG);
             return 1;
         }
-        
-        buffer += sizeof(unsigned short);
 
     }
     //================
@@ -331,18 +326,17 @@ int process_rule(char *buffer){
 
         if (strcmp(token, SRC_PORT_STR) == 0) {
 
-            *buffer = (unsigned short) SRC;
+            new_rule->src_dst_port = (unsigned short) SRC;
 
         } else if (strcmp(token, DST_PORT_STR) == 0) {
 
-            *buffer = (unsigned short) DST;
+            new_rule->src_dst_port = (unsigned short) DST;
 
         } else if (strcmp(token, "0") != 0) {
 
             printf("%s No valid SPORT/DPORT parameter\n", NOK_MSG);
             return 1;
         }
-        buffer += sizeof(unsigned short);
     }
     //================
     // SRC/DEST PORT
@@ -352,7 +346,8 @@ int process_rule(char *buffer){
         int port = atoi(token);
 
         if ((port <= 65535) && (port >= 0)) {
-            *buffer = (unsigned short) port;
+
+            new_rule->port = (unsigned short) port;
 
         } else {
 
@@ -370,18 +365,18 @@ void process_add_operation(int sock)
 {
     char buffer[MAX_BUFF_SIZE];
     int n;
-    char *offset = buffer;
+    char *offset;
 
     bzero(buffer,MAX_BUFF_SIZE);
 
+    offset = buffer;
     unsigned short code = MSG_ADD;
     stshort(code, offset);
     offset += sizeof(unsigned short);
 
-
     int corr;
     ///////////////////////////////////
-    corr = process_rule(offset);
+    corr = process_rule((rule *)offset);
     //////////////////////////////////
 
     if (corr == 0) {
@@ -432,7 +427,7 @@ void process_change_operation(int sock)
 
         int corr;
         ///////////////////////////////////
-        corr = process_rule(offset);
+        corr = process_rule((rule *)offset);
         //////////////////////////////////
 
         if (corr == 0) {
