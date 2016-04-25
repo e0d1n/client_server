@@ -55,14 +55,9 @@ void process_HELLO_msg(int sock)
 
     stshort(MSG_HELLO_RP,&hello_rp.opcode);
 
-    //hello_rp.opcode = htons(2);
-
     memcpy(hello_rp.msg,"Hello World\0",12);
 
     *((struct hello_rp *)buffer) = hello_rp;
-
-    printf("Send: %hu %s\n",hello_rp.opcode,hello_rp.msg);
-
 
     n = send(sock,buffer,sizeof(hello_rp),0);
 
@@ -120,13 +115,13 @@ void process_RULES(int sock, struct FORWARD_chain *chain)
 
 }
 
-void process_ADD(int sock, struct FORWARD_chain *chain, char *buffer)
+void process_ADD(int sock, struct FORWARD_chain *chain, rule *buffer)
 {
 
     printf("PROCESSING ADD\n");
 
     struct fw_rule *new_fw_rule = (struct fw_rule*)malloc(sizeof(struct fw_rule));
-    new_fw_rule->rule = *((rule *)buffer);
+    new_fw_rule->rule = *buffer;
 
     if(chain->first_rule == NULL){
 
@@ -222,12 +217,13 @@ void process_DELETE(int sock, struct FORWARD_chain *chain, unsigned short id)
     int count = 1;
     int found = 0;
     int valid = FALSE;
+    unsigned short id_h = ldshort(id);
     struct fw_rule *p;
     p = chain->first_rule;
     if(p != NULL) {
 
         // HEAD
-        if(id == 1){
+        if(id_h == 1){
 
             struct fw_rule *temp_r = p->next_rule;
             free(p);
@@ -238,7 +234,7 @@ void process_DELETE(int sock, struct FORWARD_chain *chain, unsigned short id)
 
             while ((p->next_rule != NULL) && !found) {
 
-                if (count == (id - 1)) {
+                if (count == (id_h - 1)) {
                     found = 1;
                 } else {
                     p = p->next_rule;
@@ -326,7 +322,7 @@ int process_msg(int sock, struct FORWARD_chain *chain)
             process_RULES(sock,chain);
             break;
         case MSG_ADD:
-            process_ADD(sock,chain,buffer + sizeof(unsigned short));
+            process_ADD(sock,chain,&(*(add *)buffer).rule_add);
             break;
         case MSG_CHANGE:
             process_CHANGE(sock,chain,buffer + sizeof(unsigned short));

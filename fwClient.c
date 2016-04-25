@@ -191,6 +191,7 @@ void process_list_operation(int sock)
 
         unsigned short tot_rules;
         unsigned short temp;
+        unsigned short port;
 
         tot_rules = (unsigned short) *offset;
 
@@ -199,7 +200,7 @@ void process_list_operation(int sock)
         rule new_rule;
 
         int i;
-        for(i=0;i<(int) tot_rules ;i++) {
+        for(i=0 ; i < (int)tot_rules ;i++) {
 
             new_rule = *((rule *) offset);
             printf("%d: ",i+1);
@@ -221,16 +222,17 @@ void process_list_operation(int sock)
             printf("\\%hu ",temp);
 
             // PORT
-            temp = new_rule.port;
+            port = new_rule.port;
             if(temp != 0) {
-                printf("%hu", temp);
                 //SRC/DEST PORT
                 temp = new_rule.src_dst_port;
                 if(temp == SRC){
                     printf("SRC ");
-                } else if(temp == DST){
+                } else if(temp == DST) {
                     printf("DST ");
                 }
+                printf("%hu", port);
+
             }
 
             offset += sizeof(rule);
@@ -365,29 +367,28 @@ void process_add_operation(int sock)
 {
     char buffer[MAX_BUFF_SIZE];
     int n;
-    char *offset;
 
     bzero(buffer,MAX_BUFF_SIZE);
 
-    offset = buffer;
-    unsigned short code = MSG_ADD;
-    stshort(code, offset);
-    offset += sizeof(unsigned short);
+    add add_rule;
+    stshort(MSG_ADD,&add_rule.opcode);
 
     int corr;
-    ///////////////////////////////////
-    corr = process_rule((rule *)offset);
-    //////////////////////////////////
+    corr = process_rule(&add_rule.rule_add);
+
 
     if (corr == 0) {
+
         /* Send message to the server */
-        n = send(sock, buffer, sizeof(buffer), 0);
+        *((add *)buffer) = add_rule;
+        n = send(sock, buffer, sizeof(add), 0);
 
         if (n < 0) {
             perror("ERROR writing to socket");
             exit(1);
         }
 
+        unsigned short code;
         bzero(buffer,MAX_BUFF_SIZE);
         recv(sock, buffer, 4, 0);
         code = ldshort(buffer);
@@ -476,7 +477,8 @@ void process_delete_operation(int sock){
     printf("ID to change: ");
     scanf("%d",&id);
     if(id>0) {
-        *offset = (unsigned short) id;
+
+        stshort(id,offset);
 
         /* Send message to the server */
         n = send(sock, buffer, sizeof(buffer), 0);
@@ -487,8 +489,9 @@ void process_delete_operation(int sock){
         }
 
         bzero(buffer,MAX_BUFF_SIZE);
-        recv(sock, buffer, 4, 0);
+        recv(sock, buffer, MAX_BUFF_SIZE, 0);
         code = ldshort(buffer);
+
         if(code == MSG_OK){
             printf("%s\n",OK_MSG);
         }else{
@@ -593,7 +596,8 @@ int main(int argc, char *argv[]){
 
     serv_addr.sin_port = htons(port);
     serv_addr.sin_family = AF_INET;
-    //inet_aton(&hostName,&serv_addr.sin_addr); //WORKING
+
+
 
     setaddrbyname(&serv_addr, hostName);
 

@@ -74,8 +74,8 @@ typedef struct LIST{
 typedef struct RULES{
 	unsigned short opcode;
 	unsigned short num_rules;
-	struct FORWARD_rule *rules;
-};
+	//struct FORWARD_rule *rules;
+}rules;
 
 /*
 4 bytes     2 bytes    2 bytes    2 bytes       2 bytes
@@ -90,6 +90,23 @@ typedef struct FORWARD_rule{
   unsigned short src_dst_port;
   unsigned short port;
 }rule;
+
+
+typedef struct ADD{
+	unsigned short opcode;
+	rule rule_add;
+}add;
+
+typedef struct CHANGE{
+	unsigned short opcode;
+	unsigned short rule_id;
+	rule rule_change;
+}change;
+
+typedef struct DELETE{
+	unsigned short opcode;
+	unsigned short rule_id;
+}delete;
 
 typedef struct OP_OK{
 	unsigned short opcode;
