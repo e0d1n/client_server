@@ -18,7 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_BUFF_SIZE 1024 
+#define MAX_BUFF_SIZE 1024
 
 #define DEFAULT_PORT 2222
 
@@ -29,7 +29,7 @@
 #define MSG_ADD 5
 #define MSG_CHANGE 6
 #define MSG_DELETE 7
-//#define MSG_FLUSH 8
+#define MSG_FLUSH2 8
 #define MSG_FINISH 9
 #define MSG_OK 10
 #define MSG_ERR 11
@@ -54,28 +54,29 @@ typedef enum{
  * ================================================================
  */
 
+
 //Structures directly mapped with a message to be sent or received
 //Estructures per encapsular les dades del missatge
+
+typedef struct HELLO{
+	unsigned short opcode;
+}op_hello;
+
 /*
               2 bytes  11 bytes       1 byte
               ------------------------------
 HELLO_RP      |  2     | Hello World | 0   | 
               ------------------------------
 */
-struct hello_rp{
+typedef struct HELLO_RP{
 	unsigned short opcode;
 	char msg[12];
-};
+}op_hello_rp;
 
 typedef struct LIST{
 	unsigned short opcode;
-}list;
+}op_list;
 
-typedef struct RULES{
-	unsigned short opcode;
-	unsigned short num_rules;
-	//struct FORWARD_rule *rules;
-}rules;
 
 /*
 4 bytes     2 bytes    2 bytes    2 bytes       2 bytes
@@ -91,22 +92,31 @@ typedef struct FORWARD_rule{
   unsigned short port;
 }rule;
 
+typedef struct RULES{
+	unsigned short opcode;
+	unsigned short num_rules;
+	rule rule_list[(MAX_BUFF_SIZE-4)/ sizeof(rule)];
+}op_rules;
 
 typedef struct ADD{
 	unsigned short opcode;
 	rule rule_add;
-}add;
+}op_add;
 
 typedef struct CHANGE{
 	unsigned short opcode;
 	unsigned short rule_id;
 	rule rule_change;
-}change;
+}op_change;
 
 typedef struct DELETE{
 	unsigned short opcode;
 	unsigned short rule_id;
-}delete;
+}op_delete;
+
+typedef struct FLUSH{
+	unsigned short opcode;
+}op_flush;
 
 typedef struct OP_OK{
 	unsigned short opcode;

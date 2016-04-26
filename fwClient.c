@@ -126,32 +126,26 @@ void print_menu()
  */
 void process_hello_operation(int sock)
 {
-    struct hello_rp hello_rp;
-
+    op_hello_rp hello_rp;
     char buffer[MAX_BUFF_SIZE];
-    int n;
-
-    unsigned short code = MSG_HELLO;
+    op_hello hello;
 
     bzero(buffer,MAX_BUFF_SIZE);
-    stshort(code, buffer);
+    stshort(MSG_HELLO, &hello.opcode);
 
+    *((op_hello *) buffer) = hello;
     /* Send message to the server */
-    n = send(sock, buffer, sizeof(unsigned short),0);
-
-
-    if (n < 0) {
+    if (send(sock, buffer, sizeof(op_hello),0) < 0) {
         perror("ERROR writing to socket");
         exit(1);
     }
 
     bzero(buffer,MAX_BUFF_SIZE);
-    recv(sock, buffer, sizeof(buffer), 0);
+    recv(sock, buffer, MAX_BUFF_SIZE, 0);
 
-    hello_rp.opcode = ldshort(buffer);
-    memcpy(hello_rp.msg,(buffer+sizeof(unsigned short)),12);
+    hello_rp = *((op_hello_rp *)buffer);
 
-    printf("Recieved: |%hu|%s|\n",hello_rp.opcode,hello_rp.msg);
+    printf("%hu - %s\n",ldshort(&hello_rp.opcode),hello_rp.msg);
 
 
 }
@@ -160,13 +154,15 @@ void process_list_operation(int sock)
 {
     char buffer[MAX_BUFF_SIZE];
     int n;
-    char *offset;
-    unsigned short opcode = MSG_LIST;
+    rule *offset;
+    op_list list_op;
 
     bzero(buffer,MAX_BUFF_SIZE);
-    stshort(opcode, buffer);
+
+    stshort(MSG_LIST, &list_op.opcode);
 
     /* Send message to the server */
+    *((op_list *)buffer) = list_op;
     n = send(sock, buffer, sizeof(unsigned short),0);
 
     if (n < 0) {
@@ -181,32 +177,29 @@ void process_list_operation(int sock)
     bzero(buffer,MAX_BUFF_SIZE);
     recv(sock, buffer, MAX_BUFF_SIZE, 0);
 
-    offset = buffer;
-    opcode = ldshort(offset);
+    //offset = buffer;
+    //unsigned short opcode;
 
+    op_rules rules_list_op = *((op_rules *)buffer);
+    short opcode = ldshort(&rules_list_op.opcode);
 
     if(opcode == 4){
-
-        offset += sizeof(unsigned short);
 
         unsigned short tot_rules;
         unsigned short temp;
         unsigned short port;
 
-        tot_rules = (unsigned short) *offset;
+        tot_rules = ldshort(&rules_list_op.num_rules);
 
-        offset += sizeof(unsigned short); //start first rule
-
-        rule new_rule;
+        offset = rules_list_op.rule_list; //start first rule
 
         int i;
         for(i=0 ; i < (int)tot_rules ;i++) {
 
-            new_rule = *((rule *) offset);
             printf("%d: ",i+1);
 
             //SRC/DEST
-            temp = new_rule.src_dst_addr;
+            temp = ldshort(&offset->src_dst_addr);
 
             if(temp == SRC){
                 printf("SRC ");
@@ -215,17 +208,18 @@ void process_list_operation(int sock)
             }
 
             //ADDRESS
-            printf("%s", inet_ntoa(new_rule.addr));
+            printf("%s", inet_ntoa(offset->addr));
 
             //MASK
-            temp = new_rule.mask;
+            temp = ldshort(&offset->mask);
             printf("\\%hu ",temp);
 
             // PORT
-            port = new_rule.port;
-            if(temp != 0) {
+            port = ldshort(&offset->port);
+            if(port != 0) {
+
                 //SRC/DEST PORT
-                temp = new_rule.src_dst_port;
+                temp = ldshort(&offset->src_dst_port);
                 if(temp == SRC){
                     printf("SRC ");
                 } else if(temp == DST) {
@@ -278,6 +272,8 @@ int process_rule(rule *new_rule){
         }
 
         new_rule->addr = address;
+    }else{
+        return 1;
     }
     //================
     // SRC/DST
@@ -286,12 +282,14 @@ int process_rule(rule *new_rule){
     if(token != NULL) {
         if (strcmp(token, SRC_STR) == 0) {
 
-            new_rule->src_dst_addr = (unsigned short) SRC;
+            //new_rule->src_dst_addr = (unsigned short) SRC;
+            stshort(SRC,&new_rule->src_dst_addr);
 
 
         } else if (strcmp(token, DST_STR) == 0) {
 
-            new_rule->src_dst_addr = (unsigned short) DST;
+            //new_rule->src_dst_addr = (unsigned short) DST;
+            stshort(DST,&new_rule->src_dst_addr);
 
         } else {
 
@@ -299,7 +297,8 @@ int process_rule(rule *new_rule){
             return 1;
         }
 
-        //printf("%s",inet_ntoa(new_rule->addr));
+    }else{
+        return 1;
     }
 
     //================
@@ -311,7 +310,8 @@ int process_rule(rule *new_rule){
 
         if ((mask <= 32) && (mask > 0)) {
 
-            new_rule->mask = (unsigned short) mask;
+            //new_rule->mask = (unsigned short) mask;
+            stshort(mask,&new_rule->mask);
 
         } else {
 
@@ -319,6 +319,8 @@ int process_rule(rule *new_rule){
             return 1;
         }
 
+    } else{
+        return 1;
     }
     //================
     // SPORT/DPORT
@@ -328,18 +330,22 @@ int process_rule(rule *new_rule){
 
         if (strcmp(token, SRC_PORT_STR) == 0) {
 
-            new_rule->src_dst_port = (unsigned short) SRC;
+            //new_rule->src_dst_port = (unsigned short) SRC;
+            stshort(SRC,&new_rule->src_dst_port);
 
         } else if (strcmp(token, DST_PORT_STR) == 0) {
 
-            new_rule->src_dst_port = (unsigned short) DST;
+            //new_rule->src_dst_port = (unsigned short) DST;
+            stshort(DST,&new_rule->src_dst_port);
 
         } else if (strcmp(token, "0") != 0) {
 
             printf("%s No valid SPORT/DPORT parameter\n", NOK_MSG);
             return 1;
         }
+
     }
+
     //================
     // SRC/DEST PORT
     //================
@@ -349,15 +355,18 @@ int process_rule(rule *new_rule){
 
         if ((port <= 65535) && (port >= 0)) {
 
-            new_rule->port = (unsigned short) port;
+            //new_rule->port = (unsigned short) port;
+            stshort(port,&new_rule->port);
 
         } else {
 
             printf("%s No valid PORT\n", NOK_MSG);
             return 1;
         }
-    }
 
+    }else{
+        stshort(0,&new_rule->port);
+    }
 
     return 0;
 
@@ -370,7 +379,7 @@ void process_add_operation(int sock)
 
     bzero(buffer,MAX_BUFF_SIZE);
 
-    add add_rule;
+    op_add add_rule;
     stshort(MSG_ADD,&add_rule.opcode);
 
     int corr;
@@ -380,8 +389,8 @@ void process_add_operation(int sock)
     if (corr == 0) {
 
         /* Send message to the server */
-        *((add *)buffer) = add_rule;
-        n = send(sock, buffer, sizeof(add), 0);
+        *((op_add *)buffer) = add_rule;
+        n = send(sock, buffer, sizeof(op_add), 0);
 
         if (n < 0) {
             perror("ERROR writing to socket");
@@ -400,6 +409,8 @@ void process_add_operation(int sock)
         }else{
             printf("%s\n",ERR_MSG_DEFAULT);
         }
+    }else{
+        printf("%s\n",ERR_MSG_DEFAULT);
     }
 
 }
@@ -408,13 +419,14 @@ void process_change_operation(int sock)
 {
     char buffer[MAX_BUFF_SIZE];
     int n,id;
-    char *offset = buffer;
+    //char *offset = buffer;
 
     bzero(buffer,MAX_BUFF_SIZE);
 
-    unsigned short code = MSG_CHANGE;
-    stshort(code, offset);
-    offset += sizeof(unsigned short);
+    op_change change_rule;
+
+    stshort(MSG_CHANGE, &change_rule.opcode);
+    //offset += sizeof(unsigned short);
 
 
     // Read user change id
@@ -422,18 +434,19 @@ void process_change_operation(int sock)
     scanf("%d",&id);
     if(id>0) {
 
-        *offset = (unsigned short) id;
-        printf("Changing id rule %hu\n", (unsigned short) *offset);
-        offset += sizeof(unsigned short);
+        //*offset = (unsigned short) id;
+        stshort(id,&change_rule.rule_id);
+        printf("Changing id rule %hu\n", change_rule.rule_id);
+        //offset += sizeof(unsigned short);
 
         int corr;
-        ///////////////////////////////////
-        corr = process_rule((rule *)offset);
-        //////////////////////////////////
+        corr = process_rule(&change_rule.rule_change);
+
 
         if (corr == 0) {
             /* Send message to the server */
-            n = send(sock, buffer, sizeof(buffer), 0);
+            *((op_change *)buffer) = change_rule;
+            n = send(sock, buffer, sizeof(op_change), 0);
 
             if (n < 0) {
                 perror("ERROR writing to socket");
@@ -442,6 +455,8 @@ void process_change_operation(int sock)
 
             bzero(buffer,MAX_BUFF_SIZE);
             recv(sock, buffer, 4, 0);
+
+            unsigned short code;
             code = ldshort(buffer);
 
             if(code == MSG_OK){
@@ -463,33 +478,33 @@ void process_change_operation(int sock)
 void process_delete_operation(int sock){
 
     char buffer[MAX_BUFF_SIZE];
-    int n,id;
-    char *offset = buffer;
+    int id;
+
+    op_delete delete_rule;
 
     bzero(buffer,MAX_BUFF_SIZE);
 
-    unsigned short code = MSG_DELETE;
-    stshort(code, offset);
-    offset += sizeof(unsigned short);
-
+    stshort(MSG_DELETE, &delete_rule.opcode);
 
     // Read user change id
-    printf("ID to change: ");
+    printf("ID to delete: ");
     scanf("%d",&id);
+
     if(id>0) {
 
-        stshort(id,offset);
+        stshort(id,&delete_rule.rule_id);
 
         /* Send message to the server */
-        n = send(sock, buffer, sizeof(buffer), 0);
-
-        if (n < 0) {
+        *((op_delete *)buffer) = delete_rule;
+        if (send(sock, buffer, sizeof(op_delete), 0) < 0) {
             perror("ERROR writing to socket");
             exit(1);
         }
 
         bzero(buffer,MAX_BUFF_SIZE);
         recv(sock, buffer, MAX_BUFF_SIZE, 0);
+
+        unsigned short code;
         code = ldshort(buffer);
 
         if(code == MSG_OK){
@@ -502,6 +517,38 @@ void process_delete_operation(int sock){
         printf("ID should be bigger than 0: %s",ERR_MSG_RULE);
     }
 
+
+}
+
+void process_flush_operation(int sock){
+
+    char buffer[MAX_BUFF_SIZE];
+
+    op_flush flush_rule;
+
+    bzero(buffer,MAX_BUFF_SIZE);
+
+    stshort(MSG_FLUSH2, &flush_rule.opcode);
+
+    /* Send message to the server */
+    *((op_flush *)buffer) = flush_rule;
+
+    if (send(sock, buffer, sizeof(op_flush), 0) < 0) {
+        perror("ERROR writing to socket");
+        exit(1);
+    }
+
+    bzero(buffer,MAX_BUFF_SIZE);
+    recv(sock, buffer, MAX_BUFF_SIZE, 0);
+
+    unsigned short code;
+    code = ldshort(buffer);
+
+    if(code == MSG_OK){
+        printf("%s\n",OK_MSG);
+    }else{
+        printf("%s%s\n",NOK_MSG,ERR_MSG_RULE);
+    }
 
 }
 
@@ -556,6 +603,7 @@ void process_menu_option(int s, int option)
             process_delete_operation(s);
             break;
         case MENU_OP_FLUSH:
+            process_flush_operation(s);
             break;
         case MENU_OP_EXIT:
             process_exit_operation(s);
