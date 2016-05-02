@@ -92,16 +92,16 @@ typedef struct FORWARD_rule{
   unsigned short port;
 }rule;
 
-typedef struct RULES{
-	unsigned short opcode;
-	unsigned short num_rules;
-	rule rule_list[(MAX_BUFF_SIZE-4)/ sizeof(rule)];
-}op_rules;
+//typedef struct RULES{
+	//unsigned short opcode;
+	//unsigned short num_rules;
+	//rule rule_list[(MAX_BUFF_SIZE-4)/ sizeof(rule)];
+//}op_rules;
 
-typedef struct ADD{
-	unsigned short opcode;
-	rule rule_add;
-}op_add;
+//typedef struct ADD{
+	//unsigned short opcode;
+	//rule rule_add;
+//}op_add;
 
 typedef struct CHANGE{
 	unsigned short opcode;

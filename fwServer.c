@@ -79,29 +79,29 @@ void process_RULES(int sock, struct FORWARD_chain *chain)
     printf("PROCESSING RULES MSG\n");
 
     char buffer[MAX_BUFF_SIZE];
-    rule *p;
+    char *offset;
 
-    op_rules rules_list;
+    bzero(buffer,MAX_BUFF_SIZE);
 
-    stshort(MSG_RULES,&rules_list.opcode);
-    stshort(chain->num_rules,&rules_list.num_rules);
+    stshort(MSG_RULES,buffer);
+    stshort(chain->num_rules,buffer+sizeof(unsigned short));
 
-    struct fw_rule *offset = chain->first_rule;
-    p = rules_list.rule_list;
+    struct fw_rule fw_rule_current;
+    offset = (buffer + 2*sizeof(unsigned short));
 
-    while((offset) != NULL){
-
-        memcpy(p,&offset->rule,sizeof(rule));
-        *p = offset->rule;
-        p += sizeof(rule);
-        offset = offset->next_rule;
-
-    };
+    if(chain->first_rule != NULL){
+        int finish = 0;
+        fw_rule_current = *chain->first_rule;
+        do{
+            *((rule *)offset) = fw_rule_current.rule;
+            if(fw_rule_current.next_rule != NULL)
+                fw_rule_current = *fw_rule_current.next_rule;
+            else finish = 1;
+            offset += sizeof(rule);
+        }while(!finish);
+    }
 
     //Send list
-    bzero(buffer,MAX_BUFF_SIZE);
-    *((op_rules *)buffer) = rules_list;
-
     if (send(sock,buffer,MAX_BUFF_SIZE,0) < 0) {
         perror("ERROR writing to socket");
         exit(1);
@@ -110,23 +110,24 @@ void process_RULES(int sock, struct FORWARD_chain *chain)
 
 }
 
-void process_ADD(int sock, struct FORWARD_chain *chain, op_add *buffer)
+void process_ADD(int sock, struct FORWARD_chain *chain, rule buffer)
 {
 
     printf("PROCESSING ADD\n");
 
     struct fw_rule *new_fw_rule = (struct fw_rule*)malloc(sizeof(struct fw_rule));
-    //STORE RULE
-    new_fw_rule->rule = buffer->rule_add;
+    new_fw_rule->rule = buffer;
+    new_fw_rule->next_rule = NULL;
 
-    if(chain->first_rule == NULL){
-
-        chain->first_rule = new_fw_rule;
-        new_fw_rule->next_rule = NULL;
+    if(chain->first_rule != NULL){
+        struct fw_rule *tmp;
+        tmp = chain->first_rule;
+        while(tmp->next_rule != NULL){
+            tmp = tmp->next_rule;
+        }
+        tmp->next_rule = new_fw_rule;
 
     }else{
-
-        new_fw_rule->next_rule = chain->first_rule;
         chain->first_rule = new_fw_rule;
     }
 
@@ -136,7 +137,6 @@ void process_ADD(int sock, struct FORWARD_chain *chain, op_add *buffer)
     op_ok msg;
     msg.opcode = MSG_OK;
     stshort(msg.opcode,response);
-
     if (send(sock,response, sizeof(MAX_BUFF_SIZE),0) < 0) {
         perror("ERROR writing to socket");
         exit(1);
@@ -340,7 +340,7 @@ int process_msg(int sock, struct FORWARD_chain *chain)
             process_RULES(sock,chain);
             break;
         case MSG_ADD:
-            process_ADD(sock,chain,(op_add *) buffer);
+            process_ADD(sock,chain,*((rule *)(buffer+sizeof(unsigned short))));
             break;
         case MSG_CHANGE:
             process_CHANGE(sock,chain,(op_change *) buffer);
@@ -368,12 +368,10 @@ int main(int argc, char *argv[]){
     struct FORWARD_chain chain;
 
     struct sockaddr_in serv_addr, cli_addr;
-    int s,s2;
+    int s,s2,pid;
 
     chain.num_rules=0;
     chain.first_rule=NULL;
-
-
 
     s = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
 
@@ -405,25 +403,24 @@ int main(int argc, char *argv[]){
 
         /* Accept actual connection from the client */
         s2 = accept(s, (struct sockaddr *)&cli_addr, &client_addrlen);
-
         if (s2 < 0) {
             perror("ERROR on accept");
             exit(1);
         }
+        pid = fork();
 
-        do {
+        if(pid > 0){
+            do {
+                finish = process_msg(s2, &chain);
+            }while(!finish);
 
-            finish = process_msg(s2, &chain);
+            exit(0);
 
-        }while(!finish);
+        }else{
 
-
-        close(s2);
-
-        return 0;
+            close(s2);
+        }
     }
-
     close(s);
-
     return 0;
 }

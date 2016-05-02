@@ -154,7 +154,7 @@ void process_list_operation(int sock)
 {
     char buffer[MAX_BUFF_SIZE];
     int n;
-    rule *offset;
+    char *offset;
     op_list list_op;
 
     bzero(buffer,MAX_BUFF_SIZE);
@@ -177,49 +177,45 @@ void process_list_operation(int sock)
     bzero(buffer,MAX_BUFF_SIZE);
     recv(sock, buffer, MAX_BUFF_SIZE, 0);
 
-    //offset = buffer;
-    //unsigned short opcode;
+    offset = buffer;
+    unsigned short opcode = ldshort(buffer);
+    unsigned short num_rules = ldshort(buffer + sizeof(unsigned short));
 
-    op_rules rules_list_op = *((op_rules *)buffer);
-    short opcode = ldshort(&rules_list_op.opcode);
+    /*op_rules rules_list_op = *((op_rules *)buffer);*/
+    /*short opcode = ldshort(&rules_list_op.opcode);*/
 
     if(opcode == 4){
 
-        unsigned short tot_rules;
-        unsigned short temp;
-        unsigned short port;
-
-        tot_rules = ldshort(&rules_list_op.num_rules);
-
-        offset = rules_list_op.rule_list; //start first rule
+        /*offset = rules_list_op.rule_list; //start first rule*/
+        offset += 2*sizeof(unsigned short);
+        rule current_rule;
 
         int i;
-        for(i=0 ; i < (int)tot_rules ;i++) {
+        for(i=0 ; i < (int)num_rules;i++) {
 
             printf("%d: ",i+1);
-
+            current_rule = *((rule*)offset);
             //SRC/DEST
-            temp = ldshort(&offset->src_dst_addr);
-
-            if(temp == SRC){
+            if(ldshort(&current_rule.src_dst_addr) == SRC){
                 printf("SRC ");
             } else{
                 printf("DST ");
             }
 
             //ADDRESS
-            printf("%s", inet_ntoa(offset->addr));
+            printf("%s", inet_ntoa(current_rule.addr));
 
             //MASK
-            temp = ldshort(&offset->mask);
-            printf("\\%hu ",temp);
+            printf("\\%hu ",ldshort(&current_rule.mask));
 
             // PORT
-            port = ldshort(&offset->port);
+            unsigned short port;
+            port = ldshort(&current_rule.port);
             if(port != 0) {
 
                 //SRC/DEST PORT
-                temp = ldshort(&offset->src_dst_port);
+                unsigned short temp;
+                temp = ldshort(&current_rule.src_dst_port);
                 if(temp == SRC){
                     printf("SRC ");
                 } else if(temp == DST) {
@@ -232,7 +228,7 @@ void process_list_operation(int sock)
             offset += sizeof(rule);
             printf("\n");
         }
-        printf("Tot Rules: %hu\n",tot_rules);
+        printf("Tot Rules: %hu\n",num_rules);
     }
 
 }
@@ -379,18 +375,18 @@ void process_add_operation(int sock)
 
     bzero(buffer,MAX_BUFF_SIZE);
 
-    op_add add_rule;
-    stshort(MSG_ADD,&add_rule.opcode);
+    /*op_add add_rule;*/
+    stshort(MSG_ADD,buffer);
+    rule new_rule;
 
     int corr;
-    corr = process_rule(&add_rule.rule_add);
-
+    corr = process_rule(&new_rule);
 
     if (corr == 0) {
 
         /* Send message to the server */
-        *((op_add *)buffer) = add_rule;
-        n = send(sock, buffer, sizeof(op_add), 0);
+        *((rule *)(buffer+sizeof(short))) = new_rule;
+        n = send(sock, buffer, sizeof(buffer), 0);
 
         if (n < 0) {
             perror("ERROR writing to socket");
@@ -419,15 +415,12 @@ void process_change_operation(int sock)
 {
     char buffer[MAX_BUFF_SIZE];
     int n,id;
-    //char *offset = buffer;
 
     bzero(buffer,MAX_BUFF_SIZE);
 
     op_change change_rule;
 
     stshort(MSG_CHANGE, &change_rule.opcode);
-    //offset += sizeof(unsigned short);
-
 
     // Read user change id
     printf("ID to change: ");
@@ -641,7 +634,6 @@ int main(int argc, char *argv[]){
     }
 
     /* Set socket parameters */
-
     serv_addr.sin_port = htons(port);
     serv_addr.sin_family = AF_INET;
 
