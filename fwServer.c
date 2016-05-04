@@ -218,20 +218,23 @@ void process_DELETE(int sock, struct FORWARD_chain *chain, op_delete *delete_rul
 
     int count = 1;
     int found = FALSE;
+    int valid = FALSE;
     unsigned short id_h;
     struct fw_rule *p;
-    struct fw_rule *temp_r;
+
     p = chain->first_rule;
     id_h = ldshort(&delete_rule->rule_id);
 
     if(p != NULL) {
+
         // HEAD
         if(id_h == 1){
 
-            temp_r = p->next_rule;
+            struct fw_rule *temp_r = p->next_rule;
             free(p);
             chain->first_rule = temp_r;
-            found = TRUE;
+            valid = TRUE;
+
         }else {
 
             while ((p->next_rule != NULL) && !found) {
@@ -242,19 +245,25 @@ void process_DELETE(int sock, struct FORWARD_chain *chain, op_delete *delete_rul
                     p = p->next_rule;
                     count++;
                 }
+
+            }
+
+            if (found) {
+
+                struct fw_rule *temp_r = p->next_rule->next_rule;
+                free(p->next_rule);
+                p->next_rule = temp_r;
+                valid = TRUE;
+
             }
         }
-    }
-    if (found) {
-
-        temp_r = p->next_rule->next_rule;
-        free(p->next_rule);
-        p->next_rule = temp_r;
         chain->num_rules -= 1;
-        msg_return(sock,MSG_OK);
+    }
 
+    if(valid) {
+        msg_return(sock,MSG_OK);
     }else{
-        msg_return(sock,MSG_ERR);
+        msg_return(sock,MSG_OK);
     }
 }
 
