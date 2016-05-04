@@ -95,7 +95,7 @@ char * getHost(int argc, char* argv[]){
         }
     }
 
-    printf("in getHost host: %s\n", hostName); //!!!!!!!!!!!!!!
+    printf("in getHost host: %s\n", hostName);
     return hostName;
 }
 
@@ -150,6 +150,10 @@ void process_hello_operation(int sock)
 
 }
 
+/**
+ * Envia una petición para listar las reglas de filtrado del firewall.
+ * @param sock socket que se utiliza para la comunicación.
+ */
 void process_list_operation(int sock)
 {
     char buffer[MAX_BUFF_SIZE];
@@ -232,11 +236,12 @@ void process_list_operation(int sock)
     }
 
 }
-/**
- * Process a single add/change rule and store it to
- * @param buffer
- */
 
+/**
+ * Añade o modifica los parametros de las reglas de filtrado de firewall.
+ * @param new_rule regla que se quiere añadir o modificar.
+ * @return true si se ha podido añadir o modificar la regla, en caso contrario devuelve false.
+ */
 int process_rule(rule *new_rule){
 
     printf("Introdueix la regla seguint el format:\n");
@@ -245,7 +250,6 @@ int process_rule(rule *new_rule){
     char full_rule[40];
     char * token;
 
-
     // Read user rule
     scanf(" %[^\n]s",full_rule);
 
@@ -253,7 +257,6 @@ int process_rule(rule *new_rule){
     //================
     // ADDRESS
     //================
-
     int v_ip;
     token = strtok (full_rule," ");
 
@@ -271,6 +274,7 @@ int process_rule(rule *new_rule){
     }else{
         return 1;
     }
+
     //================
     // SRC/DST
     //================
@@ -368,16 +372,19 @@ int process_rule(rule *new_rule){
 
 }
 
+
+/**
+ * Envia una petición para añadir una regla de filtrado del firewall.
+ * @param sock socket que se utiliza para la comunicación.
+ */
 void process_add_operation(int sock)
 {
     char buffer[MAX_BUFF_SIZE];
     int n;
+    rule new_rule;
 
     bzero(buffer,MAX_BUFF_SIZE);
-
-    /*op_add add_rule;*/
     stshort(MSG_ADD,buffer);
-    rule new_rule;
 
     int corr;
     corr = process_rule(&new_rule);
@@ -411,15 +418,17 @@ void process_add_operation(int sock)
 
 }
 
+/**
+ * Envia una petición para modificar una regla de filtrado del firewall.
+ * @param sock socket que se utiliza para la comunicación.
+ */
 void process_change_operation(int sock)
 {
     char buffer[MAX_BUFF_SIZE];
-    int n,id;
-
-    bzero(buffer,MAX_BUFF_SIZE);
-
+    int id;
     op_change change_rule;
 
+    bzero(buffer,MAX_BUFF_SIZE);
     stshort(MSG_CHANGE, &change_rule.opcode);
 
     // Read user change id
@@ -427,21 +436,17 @@ void process_change_operation(int sock)
     scanf("%d",&id);
     if(id>0) {
 
-        //*offset = (unsigned short) id;
         stshort(id,&change_rule.rule_id);
         printf("Changing id rule %hu\n", change_rule.rule_id);
-        //offset += sizeof(unsigned short);
 
         int corr;
         corr = process_rule(&change_rule.rule_change);
 
-
         if (corr == 0) {
+
             /* Send message to the server */
             *((op_change *)buffer) = change_rule;
-            n = send(sock, buffer, sizeof(op_change), 0);
-
-            if (n < 0) {
+            if (send(sock, buffer, sizeof(op_change), 0) < 0) {
                 perror("ERROR writing to socket");
                 exit(1);
             }
@@ -460,14 +465,16 @@ void process_change_operation(int sock)
                 printf("%s\n",ERR_MSG_DEFAULT);
             }
         }
+
     }else{
         printf("ID should be bigger than 0: %s",ERR_MSG_RULE);
     }
-
-
-
 }
 
+/**
+ * Envia una petición para eliminar una regla de filtrado del firewall.
+ * @param sock socket que se utiliza para la comunicación.
+ */
 void process_delete_operation(int sock){
 
     char buffer[MAX_BUFF_SIZE];
@@ -476,7 +483,6 @@ void process_delete_operation(int sock){
     op_delete delete_rule;
 
     bzero(buffer,MAX_BUFF_SIZE);
-
     stshort(MSG_DELETE, &delete_rule.opcode);
 
     // Read user change id
@@ -513,19 +519,20 @@ void process_delete_operation(int sock){
 
 }
 
+/**
+ * Envia una petición para eliminar todas las reglas de filtrado del firewall.
+ * @param sock socket que se utiliza para la comunicación.
+ */
 void process_flush_operation(int sock){
 
     char buffer[MAX_BUFF_SIZE];
-
     op_flush flush_rule;
 
     bzero(buffer,MAX_BUFF_SIZE);
-
     stshort(MSG_FLUSH2, &flush_rule.opcode);
 
     /* Send message to the server */
     *((op_flush *)buffer) = flush_rule;
-
     if (send(sock, buffer, sizeof(op_flush), 0) < 0) {
         perror("ERROR writing to socket");
         exit(1);
@@ -552,22 +559,15 @@ void process_flush_operation(int sock){
 void process_exit_operation(int sock)
 {
     char buffer[MAX_BUFF_SIZE];
-    int n;
-
-    unsigned short code = 9;
 
     bzero(buffer,MAX_BUFF_SIZE);
-    stshort(code, buffer);
+    stshort(MSG_FINISH, buffer);
 
     /* Send message to the server */
-    n = send(sock, buffer, sizeof(unsigned short),0);
-
-    if (n < 0) {
+    if (send(sock, buffer, sizeof(unsigned short),0) < 0) {
         perror("ERROR writing to socket");
         exit(1);
     }
-
-    exit(0);
 }
 
 /**
@@ -600,6 +600,7 @@ void process_menu_option(int s, int option)
             break;
         case MENU_OP_EXIT:
             process_exit_operation(s);
+            exit(0);
             break;
         default:
             printf("Invalid menu option\n");
@@ -613,7 +614,6 @@ int main(int argc, char *argv[]){
     unsigned short port;
     char *hostName;
     int menu_option = 0;
-    struct sockaddr_in serv_addr;
 
     port = getPort(argc, argv);
     hostName = getHost(argc, argv);
@@ -624,7 +624,6 @@ int main(int argc, char *argv[]){
         return -1;
     }
 
-
     /* Create a socket */
     sockfd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
 
@@ -634,10 +633,9 @@ int main(int argc, char *argv[]){
     }
 
     /* Set socket parameters */
+    struct sockaddr_in serv_addr;
     serv_addr.sin_port = htons(port);
     serv_addr.sin_family = AF_INET;
-
-
 
     setaddrbyname(&serv_addr, hostName);
 
@@ -647,15 +645,13 @@ int main(int argc, char *argv[]){
         exit(1);
     }
 
-
     do{
         print_menu();
-        // getting the user input.
         scanf("%d",&menu_option);
         printf("\n\n");
         process_menu_option(sockfd, menu_option);
 
-    }while(menu_option != MENU_OP_EXIT); //end while(opcio)
+    }while(menu_option != MENU_OP_EXIT);
 
     return 0;
 }

@@ -6,3 +6,5 @@ fwServer
 CMakeLists.txt
 .idea
 .DS_Store
+*~
+tags

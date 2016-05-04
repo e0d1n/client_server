@@ -20,7 +20,7 @@
 
 #define MAX_BUFF_SIZE 1024
 
-#define DEFAULT_PORT 2222
+#define DEFAULT_PORT 8811
 
 #define MSG_HELLO 1
 #define MSG_HELLO_RP 2
@@ -47,7 +47,7 @@ typedef enum{
 
 // Macros per afegir i extreure un short d'un missatge
 #define stshort(sval, addr) ( *((short *)(addr))=htons(sval) )
-#define ldshort(addr) ( ntohs(*((short *)(addr)) ) ) 
+#define ldshort(addr) ( ntohs(*((short *)(addr)) ) )
 
 /**
  * Structures directly mapped with a message to be sent or received
@@ -65,7 +65,7 @@ typedef struct HELLO{
 /*
               2 bytes  11 bytes       1 byte
               ------------------------------
-HELLO_RP      |  2     | Hello World | 0   | 
+HELLO_RP      |  2     | Hello World | 0   |
               ------------------------------
 */
 typedef struct HELLO_RP{
@@ -91,17 +91,6 @@ typedef struct FORWARD_rule{
   unsigned short src_dst_port;
   unsigned short port;
 }rule;
-
-//typedef struct RULES{
-	//unsigned short opcode;
-	//unsigned short num_rules;
-	//rule rule_list[(MAX_BUFF_SIZE-4)/ sizeof(rule)];
-//}op_rules;
-
-//typedef struct ADD{
-	//unsigned short opcode;
-	//rule rule_add;
-//}op_add;
 
 typedef struct CHANGE{
 	unsigned short opcode;

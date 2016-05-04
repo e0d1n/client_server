@@ -39,6 +39,32 @@ int getPort(int argc, char* argv[])
     return port;
 }
 
+/**
+ * Función que devuelve el resultado de la operación efectuada.
+ * @param opcode codigo con el resultado de la operación.
+ */
+void msg_return(int sock, int opcode){
+
+    char response[sizeof(op_err)];    //La peor respuesta es que sea un ERROR,
+                                      //por eso escogemos ese tamaño máximo;
+    if(opcode == MSG_OK){
+        op_ok msg;
+        msg.opcode = MSG_OK;
+        stshort(msg.opcode, response);
+    }else{
+        op_err msg;
+        msg.opcode = MSG_ERR;
+        msg.error_code = ERR_RULE;
+        stshort(msg.opcode, response);
+        stshort(msg.error_code, response + sizeof(msg.opcode));
+    }
+
+    if (send(sock, response, sizeof(op_err), 0) < 0) {
+        perror("ERROR writing to socket");
+        exit(1);
+    }
+}
+
 
 /**
  * Function that sends a HELLO_RP to the client
@@ -69,9 +95,9 @@ void process_HELLO_msg(int sock)
 
 
 /**
- * Function that sends a List of the rules to the client
- * @param sock the communications socket
- * @param chain of rules
+ * Función que envia al cliente una lista con las reglas del firewall.
+ * @param sock socket que se utiliza para la comunicación.
+ * @param chain la cadena con que contiene las reglas de filtrado.
  */
 void process_RULES(int sock, struct FORWARD_chain *chain)
 {
@@ -110,6 +136,12 @@ void process_RULES(int sock, struct FORWARD_chain *chain)
 
 }
 
+/**
+ * Función que agregra una nueva regla a la lista con las reglas del firewall.
+ * @param sock socket que se utiliza para la comunicación.
+ * @param chain la cadena con que contiene las reglas de filtrado.
+ * @param buffer buffer con la información perteneciente a la nueva regla que se desea agregar a la lista.
+ */
 void process_ADD(int sock, struct FORWARD_chain *chain, rule buffer)
 {
 
@@ -133,20 +165,17 @@ void process_ADD(int sock, struct FORWARD_chain *chain, rule buffer)
 
     chain->num_rules += 1;
 
-    char response[MAX_BUFF_SIZE];
-    op_ok msg;
-    msg.opcode = MSG_OK;
-    stshort(msg.opcode,response);
-    if (send(sock,response, sizeof(MAX_BUFF_SIZE),0) < 0) {
-        perror("ERROR writing to socket");
-        exit(1);
-    }
-
+    msg_return(sock,MSG_OK);
 }
 
+/**
+ * Función que modifica la regla de firewall escogida de la lista.
+ * @param sock socket que se utiliza para la comunicación.
+ * @param chain la cadena con que contiene las reglas de filtrado.
+ * @param buffer buffer con la información perteneciente a la regla que se desea modificar.
+ */
 void process_CHANGE(int sock, struct FORWARD_chain *chain, op_change *buffer)
 {
-
     printf("PROCESSING CHANGE\n");
 
     unsigned short id;
@@ -165,35 +194,23 @@ void process_CHANGE(int sock, struct FORWARD_chain *chain, op_change *buffer)
             p = p->next_rule;
             count++;
         }
-
     }
-
-    char response[MAX_BUFF_SIZE];
 
     if (found) {
-
         p->rule = buffer->rule_change;
-
-        op_ok msg;
-        msg.opcode = MSG_OK;
-        stshort(msg.opcode,response);
-
+        msg_return(sock,MSG_OK);
     }else{
-
-        op_err msg;
-        msg.opcode = MSG_ERR;
-        msg.error_code = ERR_RULE;
-        stshort(msg.opcode,response);
-        stshort(msg.error_code,response + sizeof(unsigned short));
-
+        msg_return(sock,MSG_ERR);
     }
 
-    if (send(sock, response, sizeof(MAX_BUFF_SIZE), 0) < 0) {
-        perror("ERROR writing to socket");
-        exit(1);
-    }
 }
 
+/**
+ * Función que elimina la regla escogida de la lista con las reglas del firewall.
+ * @param sock socket que se utiliza para la comunicación.
+ * @param chain la cadena con que contiene las reglas de filtrado.
+ * @param buffer buffer con la información perteneciente a la regla que se desea eliminar.
+ */
 void process_DELETE(int sock, struct FORWARD_chain *chain, op_delete *delete_rule)
 {
 
@@ -201,23 +218,20 @@ void process_DELETE(int sock, struct FORWARD_chain *chain, op_delete *delete_rul
 
     int count = 1;
     int found = FALSE;
-    int valid = FALSE;
     unsigned short id_h;
     struct fw_rule *p;
-
+    struct fw_rule *temp_r;
     p = chain->first_rule;
     id_h = ldshort(&delete_rule->rule_id);
 
     if(p != NULL) {
-
         // HEAD
         if(id_h == 1){
 
-            struct fw_rule *temp_r = p->next_rule;
+            temp_r = p->next_rule;
             free(p);
             chain->first_rule = temp_r;
-            valid = TRUE;
-
+            found = TRUE;
         }else {
 
             while ((p->next_rule != NULL) && !found) {
@@ -228,60 +242,36 @@ void process_DELETE(int sock, struct FORWARD_chain *chain, op_delete *delete_rul
                     p = p->next_rule;
                     count++;
                 }
-
-            }
-
-            if (found) {
-
-                struct fw_rule *temp_r = p->next_rule->next_rule;
-                free(p->next_rule);
-                p->next_rule = temp_r;
-
-                valid = TRUE;
-
             }
         }
-
-        chain->num_rules -= 1;
-
     }
+    if (found) {
 
-    char response[MAX_BUFF_SIZE];
-
-    if(valid) {
-
-        op_ok msg;
-        msg.opcode = MSG_OK;
-        stshort(msg.opcode,response);
+        temp_r = p->next_rule->next_rule;
+        free(p->next_rule);
+        p->next_rule = temp_r;
+        chain->num_rules -= 1;
+        msg_return(sock,MSG_OK);
 
     }else{
-
-        op_err msg;
-        msg.opcode = MSG_ERR;
-        msg.error_code = ERR_RULE;
-        stshort(msg.opcode,response);
-        stshort(msg.error_code,response + sizeof(unsigned short));
-
-    }
-
-    if (send(sock, response, sizeof(MAX_BUFF_SIZE), 0) < 0) {
-        perror("ERROR writing to socket");
-        exit(1);
+        msg_return(sock,MSG_ERR);
     }
 }
 
+/**
+ * Función que elimina todas las reglas de la lista..
+ * @param sock socket que se utiliza para la comunicación.
+ * @param chain la cadena con que contiene las reglas de filtrado.
+ */
 void process_FLUSH(int sock, struct FORWARD_chain *chain){
 
     printf("PROCESSING FLUSH\n");
 
-    int num_rules;
+    int num_rules = chain->num_rules;
     int i;
     struct fw_rule *p;
 
-
-    num_rules = chain->num_rules;
-
-    for(i = 0;i<num_rules;i++){
+    for(i = 0 ; i<num_rules ; i++){
 
         p = chain->first_rule;
         struct fw_rule *temp_r = p->next_rule;
@@ -290,16 +280,7 @@ void process_FLUSH(int sock, struct FORWARD_chain *chain){
         chain->num_rules -= 1;
     }
 
-    char response[MAX_BUFF_SIZE];
-
-    op_ok msg;
-    msg.opcode = MSG_OK;
-    stshort(msg.opcode,response);
-
-    if (send(sock, response, sizeof(MAX_BUFF_SIZE), 0) < 0) {
-        perror("ERROR writing to socket");
-        exit(1);
-    }
+    msg_return(sock,MSG_OK);
 
 }
 
@@ -315,15 +296,12 @@ int process_msg(int sock, struct FORWARD_chain *chain)
 {
 
     int finish = FALSE;
-    int n;
     char buffer[MAX_BUFF_SIZE];
     unsigned short op_code;
 
     bzero(buffer,MAX_BUFF_SIZE);
 
-    n = recv(sock, buffer, MAX_BUFF_SIZE, 0);
-
-    if (n < 0) {
+    if (recv(sock, buffer, MAX_BUFF_SIZE, 0) < 0) {
         perror("ERROR reading from socket");
         exit(1);
     }
@@ -381,7 +359,6 @@ int main(int argc, char *argv[]){
     }
 
     /* Initialize socket structure */
-
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(port);
@@ -393,11 +370,8 @@ int main(int argc, char *argv[]){
     }
 
     /*Start listening for the clients */
-
     listen(s,MAX_QUEUED_CON);
-
     socklen_t client_addrlen = sizeof(cli_addr);
-
 
     while(1) {
 
@@ -410,10 +384,11 @@ int main(int argc, char *argv[]){
         pid = fork();
 
         if(pid > 0){
+            close(s);
             do {
                 finish = process_msg(s2, &chain);
             }while(!finish);
-
+            close(s2);
             exit(0);
 
         }else{
@@ -421,6 +396,5 @@ int main(int argc, char *argv[]){
             close(s2);
         }
     }
-    close(s);
     return 0;
 }
